@@ -8,3 +8,4 @@ services:
     volumes:
       - ..:/workspace:cached
     tty: true
+    runtime: nvidia
