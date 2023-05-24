@@ -1,3 +1,8 @@
+"""
+This script scrapes Metacritic index page for game reviews, building a list of URLs
+for each individual game and platform.
+"""
+
 import csv
 import re
 from datetime import datetime
@@ -12,13 +17,6 @@ def get_list_url():
 
 
 def safe_cast(v, to_type, default=None):
-    """safe_cast
-    Exception safe casting function
-    :param v: Value to be cast
-    :param to_type: Type to be cast into
-    :param default: Default value in case of failure
-    :return: Casted value, or default value in failure
-    """
     try:
         return to_type(v)
     except (ValueError, TypeError):
@@ -112,7 +110,7 @@ def main():
         for page in range(0, 202):
             print("Page ", page)
             html = get_games_page(page)
-            soup = BeautifulSoup(html, "html.parser")
+            soup = BeautifulSoup(html, "html5lib")
             games = soup.find_all("td", attrs={"class": "clamp-summary-wrap"})
             scraped_games = [(page,) + parse_product_row(row) for row in games]
             for row in scraped_games:

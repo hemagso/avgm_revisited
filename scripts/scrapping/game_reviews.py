@@ -4,7 +4,6 @@ import re
 from datetime import datetime
 from time import sleep
 
-import pandas as pd
 import requests
 from bs4 import BeautifulSoup, Tag
 
@@ -28,7 +27,8 @@ def get_game_page(url: str, page_no: int) -> Tag:
     )
     if r.status_code != 200:
         raise ValueError(r.status_code)
-    return BeautifulSoup(r.text, "html.parser")
+    dom = BeautifulSoup(r.text.replace("<br>", "\n").replace("<br/>", "\n"), "html5lib")
+    return dom
 
 
 def get_review_text(review_dom: Tag) -> str:
@@ -65,7 +65,10 @@ def parse_review(review_dom: Tag) -> tuple[str, str, int, str]:
 
 
 def get_game_reviews_page(page: Tag):
-    reviews_doms = page.find("ol", attrs={"class": "reviews user_reviews"}).find_all(
+    list_dom = page.find("ol", attrs={"class": "reviews user_reviews"})
+    if not list_dom:
+        return []
+    reviews_doms = list_dom.find_all(
         "li",
         attrs={
             "class": [
@@ -82,7 +85,7 @@ def get_game_reviews(game: str):
     try:
         out_file = game.replace("/", "_")
         if os.path.exists(f"data/raw/games/{out_file}.csv"):
-            print(f"Skipping {game}: Already Exists")
+            # print(f"Skipping {game}: Already Exists")
             return
         url = f"https://www.metacritic.com{game}/user-reviews"
         first_page = get_game_page(url, 0)
@@ -92,13 +95,13 @@ def get_game_reviews(game: str):
             print(game, page_no)
             page = get_game_page(url, page_no)
             reviews += get_game_reviews_page(page)
-            sleep(0.5)
+            sleep(0.25)
         with open(f"data/raw/games/{out_file}.csv", "w") as file:
             writer = csv.writer(file)
             writer.writerows(reviews)
-        sleep(1)
+        sleep(0.25)
     except Exception as e:
-        print(f"Skipping {game}: Exception")
+        print(f"Skipping {url}: Exception")
         print(e)
 
 
