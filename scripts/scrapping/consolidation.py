@@ -5,7 +5,6 @@ from typing import Generator, NamedTuple
 import pyarrow as pa
 import pyarrow.csv as pc
 import pyarrow.parquet as pq
-from pyarrow import dataset as ds
 
 
 class Game(NamedTuple):
@@ -27,11 +26,6 @@ def get_index() -> Generator[GameIndexItem, None, None]:
 
 
 def main():
-    partitioning = ds.partitioning(
-        schema=pa.schema(
-            [pa.field("game", pa.string()), pa.field("platform", pa.string())]
-        )
-    )
     tables = []
     for (game_name, platform), file in get_index():
         try:
@@ -52,9 +46,6 @@ def main():
             table = table.append_column("game", pa.array([game_name] * len(table)))
             table = table.append_column("platform", pa.array([platform] * len(table)))
 
-            pq.write_to_dataset(
-                table, root_path="data/raw/parquet", partitioning=partitioning
-            )
             tables.append(table)
 
         except FileNotFoundError as e:
