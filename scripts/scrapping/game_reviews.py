@@ -9,19 +9,20 @@ from bs4 import BeautifulSoup, Tag
 
 
 def get_number_pages(page: Tag) -> int:
-    if last_page_dom := page.find("li", attrs={"class": "page last_page"}):
-        last_page_dom = last_page_dom.find("a")
-        return int(last_page_dom.text)
-    return 1
+    match last_page_dom := page.find("li", attrs={"class": "page last_page"}):
+        case Tag():
+            match last_page_anchor := last_page_dom.find("a"):
+                case Tag():
+                    return int(last_page_anchor.text)
+                case _:
+                    raise ValueError("Last page anchor not found in Tag")
+        case None:
+            return 1
+        case _:
+            raise ValueError("Last page anchor not found in Tag")
 
 
 def get_game_page(url: str, page_no: int) -> Tag:
-    """get_games_page
-    Retrieve the game list html document from metacritic.
-    :param page: Desired page on the metacritic game list.
-    :return: String containing the html document.
-    """
-
     r = requests.get(
         url, params={"page": page_no}, headers={"User-Agent": "Metascraper 1.0"}
     )
@@ -32,28 +33,45 @@ def get_game_page(url: str, page_no: int) -> Tag:
 
 
 def get_review_text(review_dom: Tag) -> str:
-    review_body_dom = review_dom.find("div", attrs={"class": "review_body"})
-    if blurb_expanded_dom := review_body_dom.find(
-        "span", attrs={"class": "blurb blurb_expanded"}
-    ):
-        return blurb_expanded_dom.text
-    else:
-        return review_body_dom.text
+    match review_body_dom := review_dom.find("div", attrs={"class": "review_body"}):
+        case Tag():
+            match blurb_expanded_dom := review_body_dom.find(
+                "span", attrs={"class": "blurb blurb_expanded"}
+            ):
+                case Tag():
+                    return blurb_expanded_dom.text
+                case None:
+                    return review_body_dom.text
+                case _:
+                    raise ValueError("Review text not found in Tag")
+        case _:
+            raise ValueError("Review body not found in Tag")
 
 
 def get_review_score(review_dom: Tag) -> int:
-    return int(review_dom.find("div", attrs={"class": "review_grade"}).text)
+    match review_grade_dom := review_dom.find("div", attrs={"class": "review_grade"}):
+        case Tag():
+            return int(review_grade_dom.text)
+        case _:
+            raise ValueError("Review grade not found in Tag")
 
 
 def get_reviewer_and_date(review_dom: Tag) -> tuple[str, str]:
-    review_critic_dom = review_dom.find("div", attrs={"class": "review_critic"})
-    reviewer = re.sub(
-        "(\s|\n)+", "", review_critic_dom.find("div", attrs={"class": "name"}).text
-    )
-    date = datetime.strptime(
-        review_critic_dom.find("div", attrs={"class": "date"}).text, "%b %d, %Y"
-    )
-    return reviewer, date.strftime("%Y-%m-%d")
+    match critic_dom := review_dom.find("div", attrs={"class": "review_critic"}):
+        case Tag():
+            match critic_name_dom := critic_dom.find("div", attrs={"class": "name"}):
+                case Tag():
+                    reviewer = re.sub("(\s|\n)+", "", critic_name_dom.text)
+                case _:
+                    raise ValueError("Critic name not found in Tag")
+            match date_dom := critic_dom.find("div", attrs={"class": "date"}):
+                case Tag():
+                    review_date = datetime.strptime(date_dom.text, "%b %d, %Y")
+                case _:
+                    raise ValueError("Review date not found in Tag")
+        case _:
+            raise ValueError("Review critic not found in Tag")
+    return reviewer, review_date.strftime("%Y-%m-%d")
 
 
 def parse_review(review_dom: Tag) -> tuple[str, str, int, str]:
@@ -65,27 +83,36 @@ def parse_review(review_dom: Tag) -> tuple[str, str, int, str]:
 
 
 def get_game_reviews_page(page: Tag):
-    list_dom = page.find("ol", attrs={"class": "reviews user_reviews"})
-    if not list_dom:
-        return []
-    reviews_doms = list_dom.find_all(
-        "li",
-        attrs={
-            "class": [
-                "review user_review",
-                "review user_review first_review",
-                "review user_review last_review",
-            ]
-        },
-    )
-    return [parse_review(review_dom) for review_dom in reviews_doms]
+    match list_dom := page.find("ol", attrs={"class": "reviews user_reviews"}):
+        case Tag():
+            ans = []
+            reviews_doms = list_dom.find_all(
+                "li",
+                attrs={
+                    "class": [
+                        "review user_review",
+                        "review user_review first_review",
+                        "review user_review last_review",
+                    ]
+                },
+            )
+            for item in reviews_doms:
+                match item:
+                    case Tag():
+                        ans.append(parse_review(item))
+                    case _:
+                        raise ValueError("Review item not found in Tag")
+            return ans
+        case None:
+            return []
+        case _:
+            raise ValueError("Review list not found in Tag")
 
 
 def get_game_reviews(game: str):
     try:
         out_file = game.replace("/", "_")
         if os.path.exists(f"data/raw/games/{out_file}.csv"):
-            # print(f"Skipping {game}: Already Exists")
             return
         url = f"https://www.metacritic.com{game}/user-reviews"
         first_page = get_game_page(url, 0)
@@ -98,6 +125,7 @@ def get_game_reviews(game: str):
             sleep(0.25)
         with open(f"data/raw/games/{out_file}.csv", "w") as file:
             writer = csv.writer(file)
+            print(f"Writing {len(reviews)} reviews")
             writer.writerows(reviews)
         sleep(0.25)
     except Exception as e:
@@ -106,7 +134,7 @@ def get_game_reviews(game: str):
 
 
 def main():
-    with open("data/raw/game_index.csv", "r") as file:
+    with open("data/game_index.csv", "r") as file:
         reader = csv.reader(file, delimiter=";")
         for _, _, url, _, _, _, _ in reader:
             get_game_reviews(url)
